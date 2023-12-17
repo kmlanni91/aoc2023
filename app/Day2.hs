@@ -74,11 +74,26 @@ resolveGame :: (Int, [CubeSet]) -> (Int, Bool)
 resolveGame (gameId, game) = (gameId, all (isPossibleSet condition) game)
 
 
+maxCubeSet :: CubeSet -> CubeSet -> CubeSet
+maxCubeSet a b = CubeSet { red = max (red a) (red b)
+                         , green = max (green a) (green b)
+                         , blue = max (blue a) (blue b)
+                         }
+
+
+minPossible :: [CubeSet] -> CubeSet
+minPossible = foldl1 maxCubeSet
+
+
+powerCubeSet :: CubeSet -> Int
+powerCubeSet a = red a * green a * blue a
+
+
 main :: IO ()
 main = do
-    input <- readFile "data/day2/input.txt"
-    let games = map (resolveGame . parseGame) (lines input)
-        validGameSum = sum $ map fst $ filter snd games
-    mapM_ putStrLn [show validGameSum]
+    input <- readFile "data/day2/input2.txt"
+    let games = map (minPossible . snd . parseGame) (lines input)
+        gamePowers = map powerCubeSet games
+    mapM_ putStrLn [show $ sum gamePowers]
 
 
