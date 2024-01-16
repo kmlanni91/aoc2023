@@ -2,11 +2,18 @@ module Main where
 import Data.List
 
 
+pairRanges :: [Int] -> [(Int, Int)]
+pairRanges [] = []
+pairRanges (a:b:leftovers) = (a, b):pairRanges leftovers
+
+
 parseSeeds :: String -> [Int]
 parseSeeds x = seeds
     where
         seedsStrs = tail $ words x
-        seeds = map read seedsStrs 
+        parsedInts = map read seedsStrs
+        seedRanges = pairRanges parsedInts
+        seeds = concatMap (\(start, len) -> [start..start + len - 1]) seedRanges
 
 
 parseSections :: [String] -> [[String]]
@@ -43,7 +50,7 @@ convertValue val mapRanges = result
 
 
 seedToLocation :: Int -> [[MapRange]] -> Int
-seedToLocation = foldl convertValue
+seedToLocation = foldl' convertValue
 
 
 main = do
