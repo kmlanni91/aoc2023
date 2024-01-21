@@ -3,7 +3,7 @@ module Main where
 
 
 parseLine :: String -> [Int]
-parseLine = map read . tail . words
+parseLine line = [(read . concat . tail . words) line]
 
 
 calculateDistance :: Int -> Int -> Int
