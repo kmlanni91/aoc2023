@@ -21,14 +21,20 @@ parseHandType str = case cardGroups of [5] -> FiveOfAKind
                                        [2, 1, 1, 1] -> OnePair
                                        [1, 1, 1, 1, 1] -> HighCard
     where
-        cardGroups = sortBy (comparing Down) . map length . group $ sort str
+        groups = group $ sort str
+        jokers = filter (elem 'J') groups
+        numJokers = case jokers of [] -> 0
+                                   _ -> length $ head jokers
+
+        otherLengths = sortBy (comparing Down) . map length $ filter (notElem 'J') groups
+        cardGroups = case otherLengths of [] -> [numJokers]
+                                          x:xs -> (x + numJokers):xs
 
 
 parseCardValue :: Char -> Int
-parseCardValue 'A' = 14
-parseCardValue 'K' = 13
-parseCardValue 'Q' = 12
-parseCardValue 'J' = 11
+parseCardValue 'A' = 13
+parseCardValue 'K' = 12
+parseCardValue 'Q' = 11
 parseCardValue 'T' = 10
 parseCardValue '9' = 9
 parseCardValue '8' = 8
@@ -38,7 +44,7 @@ parseCardValue '5' = 5
 parseCardValue '4' = 4
 parseCardValue '3' = 3
 parseCardValue '2' = 2
-
+parseCardValue 'J' = 1
 
 parseHandValues :: String -> [Int]
 parseHandValues = map parseCardValue
