@@ -29,7 +29,7 @@ parseDirections = map toDirection
 parseNode :: String -> Node
 parseNode str = Node val (left, right)
     where
-        [val, left, right] = filter (/= "") $ map (filter C.isAlpha) $ words str
+        [val, left, right] = filter (/= "") $ map (filter C.isAlphaNum) $ words str
 
 
 findNode :: String -> [Node] -> Node
@@ -44,9 +44,9 @@ moveNode nodes direction current = findNode nextNode nodes
                                      Main.Right -> right
 
 
-findFinalNode :: String -> [Node] -> [Direction] -> NodePointer -> NodePointer
+findFinalNode :: Char -> [Node] -> [Direction] -> NodePointer -> NodePointer
 findFinalNode end nodes directions (NodePointer counter node)
-    | val node == end = NodePointer counter node
+    | (last . val) node == end = NodePointer counter node
     | otherwise = findFinalNode end nodes (tail directions) nextPointer
         where
             nextNode = moveNode nodes (head directions) node
@@ -59,6 +59,6 @@ main = do
     let inputLines = lines input
     let directions = cycle $ map toDirection $ head inputLines
     let nodes = map parseNode $ filter (/="") $ tail inputLines
-    let first = NodePointer 0 (findNode "AAA" nodes)
-    print $ counter $ findFinalNode "ZZZ" nodes directions first
+    let firstNodes = map (NodePointer 0) $ filter (\node -> (last . val) node == 'A') nodes 
+    print $ foldr (lcm . counter . findFinalNode 'Z' nodes directions) 1 firstNodes
 
