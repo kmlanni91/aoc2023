@@ -21,4 +21,4 @@ extrapolate a
 main :: IO ()
 main = do
     input <- readFile "data/day9/input.txt"
-    print $ sum $ map (sum . map last . extrapolate . parseLine) $ lines input
+    print $ sum $ map (foldr1 (-) . map head . extrapolate . parseLine) $ lines input
