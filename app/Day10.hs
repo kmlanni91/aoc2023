@@ -5,13 +5,15 @@ import Data.Maybe (isJust, fromJust)
 import Control.Monad (join)
 
 
-data Position = Position Int Int deriving (Show) 
+data Position = Position Int Int deriving (Show, Eq) 
 
-data Direction = West | East | North | South deriving (Show, Eq)
+data Direction = West | East | North | South deriving (Show, Eq, Enum, Bounded)
 
 type GridItem = (Char, Position)
 
 type Grid = [[GridItem]]
+
+data RegionState = InRegion | NotInRegion deriving (Show, Eq)
 
 
 parseLine :: Int -> String -> [GridItem]
@@ -23,6 +25,10 @@ parseGrid = map (uncurry parseLine) .  zip [0..]
 
 findInGrid :: Grid -> Position -> Maybe GridItem
 findInGrid grid (Position x y) = (grid !? y) >>= (!?x)
+
+
+findStart :: Grid -> GridItem
+findStart = (fromJust . join) . find isJust . map (find (\(c, _) -> c == 'S'))
 
 
 nextDirection :: Char -> Direction -> Direction
@@ -41,53 +47,127 @@ nextDirection 'F' West = South
 
 
 toPosition :: Direction -> Position -> Position
-toPosition direction (Position x y) = case direction of North -> Position x (y - 1)
-                                                        South -> Position x (y + 1)
-                                                        East -> Position (x + 1) y
-                                                        West -> Position (x - 1) y
+toPosition direction (Position x y) = case direction of 
+    North -> Position x (y - 1)
+    South -> Position x (y + 1)
+    East -> Position (x + 1) y
+    West -> Position (x - 1) y
 
 
-validStartNext :: Direction -> GridItem -> Bool
-validStartNext North (c, _) = c `elem` "|7F"
-validStartNext East (c, _) = c `elem` "-J7"
-validStartNext South (c, _) = c `elem` "|LJ"
+validNext :: Direction -> GridItem -> Maybe GridItem
+validNext _ ('S', pos) = Just ('S', pos)
+validNext dir (c, pos)
+    | (dir == North) && (c `elem` "|7F") = Just (c, pos)
+    | (dir == South) && (c `elem` "|LJ") = Just (c, pos)
+    | (dir == East) && (c `elem` "J7-") = Just (c, pos)
+    | (dir == West) && (c `elem` "FL-") = Just (c, pos)
+    | otherwise = Nothing
 
 
-findStartNext :: Grid -> Position -> Direction
-findStartNext grid startPos = fst
-        $ NE.head
-        $ NE.fromList
-        $ filter (uncurry validStartNext)
-        $ map (\(d, mp) -> (d, fromJust mp))
-        $ filter (\(d, mp) -> isJust mp) possibleNexts
+getNext :: Grid -> Direction -> GridItem -> Maybe GridItem
+getNext grid dir item = result 
     where
-        northItem = findInGrid grid $ toPosition North startPos
-        eastItem = findInGrid grid $ toPosition East startPos
-        southItem = findInGrid grid $ toPosition South startPos
-        possibleNexts = [(North, northItem), (East, eastItem), (South, southItem)]
+        next = ((findInGrid grid) . (toPosition dir) . snd) item
+        result = next >>= (validNext dir)
+
+
+followPath :: Grid -> Direction -> NE.NonEmpty (Maybe GridItem) -> NE.NonEmpty (Maybe GridItem)
+followPath grid dir path = result where
+    current = NE.last path
+    next = current >>= (getNext grid dir)
+    result = case next of
+        Nothing -> NE.appendList path [Nothing]
+        Just ('S', pos) -> path
+        Just (c, pos) -> followPath grid (nextDirection c dir) $ NE.appendList path [Just (c, pos)]
+
+
+buildLoop :: Grid -> [GridItem]
+buildLoop grid = loop where
+    start = findStart grid
+    possibleLoops = map ((flip $ followPath grid) (NE.fromList [Just start])) [(minBound :: Direction)..]
+    loop = map fromJust $ NE.toList . fromJust $ find (all isJust) possibleLoops
+
+
+toSimpleGrid :: Grid -> [GridItem] -> Grid
+toSimpleGrid grid loop = map (map toSimpleChar) grid where
+    toSimpleChar (c,pos)
+        | (c, pos) `elem` loop = ('*', pos)
+        | otherwise = ('.', pos)
+
+
+isIntersection :: GridItem -> Maybe GridItem -> Maybe GridItem -> Bool
+isIntersection ('*', _) Nothing (Just next) = True
+isIntersection ('*', _) (Just prev) Nothing = True
+isIntersection ('*', _) (Just (pc, _)) (Just (nc, _)) = any (=='.') [pc, nc]
+isIntersection _ _ _ = False
+
+
+window :: Grid -> GridItem -> (GridItem, Maybe GridItem, Maybe GridItem)
+window grid (c, Position x y) = ((c, Position x y), prev, next) where
+    prev = findInGrid grid (Position (x-1) y)
+    next = findInGrid grid (Position (x+1) y)
+
+
+uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
+uncurry3 f (a, b, c) = f a b c
+
+
+intersections :: Grid -> [[GridItem]]
+intersections grid = map (filter ((uncurry3 isIntersection) . (window grid))) grid
+
+
+groupIntersections :: [a] -> [(a, a)]
+groupIntersections intsects = group intsects where
+     toTuple [x,y] = (x, y)
+     group [] = []
+     group [a] = []
+     group list = (toTuple $ take 2 list):group (drop 1 list)
+
+
+filterAlternates :: [a] -> [a]
+filterAlternates [] = []
+filterAlternates [x] = [x]
+filterAlternates (x:xs) = x:(drop 1 xs)
+
+
+inFillRange :: GridItem -> (GridItem,GridItem) -> Bool
+inFillRange (_, Position x _) ((_, Position x1 _), (_, Position x2 _))
+    | x > x1 && x < x2 = True
+    | otherwise = False
+
+
+fillChar :: [(GridItem, GridItem)] -> GridItem -> GridItem
+fillChar intsects item = case item of
+    ('*', _) -> item
+    (c, pos) -> if any (inFillRange item) intsects then ('I', pos) else item
+
+
+fillLine :: [GridItem] -> [(GridItem, GridItem)] -> [GridItem]
+fillLine line intsects = map (fillChar intsects) line
+
+
+fillGrid :: Grid -> Grid
+fillGrid grid = result where
+    intsectList = map (filterAlternates . groupIntersections) $ intersections grid
+    result = map (uncurry fillLine) $ zip grid intsectList
 
 
 
-
-findStart :: Grid -> GridItem
-findStart = (fromJust . join) . find isJust . map (find (\(c, _) -> c == 'S'))
-        
-
-buildLoop :: Grid -> Direction -> NE.NonEmpty GridItem -> NE.NonEmpty GridItem
-buildLoop grid nextDir loop
-    | c == 'S' = loop
-    | otherwise = buildLoop grid (nextDirection c nextDir) $ NE.appendList loop [(c, nextPos)]
-    where
-        (c, nextPos) = fromJust $ findInGrid grid $ toPosition nextDir $ snd $ NE.last loop
-
+printGrid :: Grid -> IO ()
+printGrid = mapM_ (print . map fst)
 
 
 main :: IO ()
 main = do
-    input <- readFile "data/day10/input.txt"
+    input <- readFile "data/day10/sample3.txt"
     let grid = parseGrid $ lines input
-    let (startChar, startPos) = findStart grid
-    let startNext = findStartNext grid startPos
-    let loop = NE.toList $ buildLoop grid startNext $ NE.fromList [(startChar, startPos)]
-    let t = zipWith min (zipWith (\a b -> a) [0..] loop) (reverse (zipWith (\a b -> a) [1..] (reverse loop))) 
-    print $ maximum t
+    --printGrid grid
+    let loop = buildLoop grid
+    --print loop
+    let simpleGrid = toSimpleGrid grid loop
+    printGrid simpleGrid
+    putStrLn ""
+    let filled = fillGrid simpleGrid
+    printGrid filled
+    putStrLn ""
+    print $ sum $ map (length . (filter (=='I')) . map fst) filled
