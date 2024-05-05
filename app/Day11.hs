@@ -49,34 +49,19 @@ emptyCols grid = result where
     columns = zip [0..] $ map (column grid) [0..(xlen grid) - 1]
     result = map fst $ filter (isEmpty . snd) columns
 
-reposition :: Point -> Int -> Int -> Point
-reposition (Point v x y) xinc yinc = Point v (x + xinc) (y + yinc)
+expMultiplier :: Int
+expMultiplier = 1000000
 
-expandRow :: Int -> [Int] -> [Point] -> [Point]
-expandRow yinc emptyCols row' = recompute row' where
-    recompute [] = []
-    recompute (p:ps)
-        | px `elem` emptyCols = newPoint:Point '.' (x newPoint + 1) (y newPoint):recompute ps
-        | otherwise = newPoint:recompute ps
-        where
-            px = x p
-            xinc = length $ filter (\a -> a < px) emptyCols
-            newPoint = reposition p xinc yinc
+expandGalaxy :: [Int] -> [Int] -> Point -> Point
+expandGalaxy ecols erows (Point c x' y') = Point c (x' + incX) (y' + incY) where
+    getElen b emptys = length $ filter (\a -> a < b) emptys
+    getNew elen
+        | elen == 0 = 0
+        | expMultiplier == 1 = elen 
+        | otherwise = elen * expMultiplier - elen
+    incX = getNew $ getElen x' ecols
+    incY = getNew $ getElen y' erows
 
-expandGrid :: Grid -> Grid
-expandGrid grid = Grid (expand $ gridpoints grid) newXlen newYlen where
-    erows = emptyRows grid
-    ecols = emptyCols grid
-    newYlen = ylen grid + length erows
-    newXlen = xlen grid + length ecols
-    expand [] = []
-    expand (r:rs)
-        | ry `elem` erows = newRow:map (\a -> Point '.' a (ry + 2)) [0..newXlen - 1]:expand rs 
-        | otherwise = newRow:expand rs
-        where
-            ry = y $ head r
-            yinc = length $ filter (\a -> a < ry) erows
-            newRow = expandRow yinc ecols r
 
 findGalaxies :: Grid -> [Point]
 findGalaxies = concat . (map (filter ((=='#') . val))) . gridpoints
@@ -94,18 +79,13 @@ main = do
     input <- readFile "data/day11/input.txt"
     let ilines = lines input
     let grid = toGrid ilines
-    --print grid
-    --printGrid grid
-    --print $ row grid 4
-    --print $ column grid 2
-    --print $ emptyRows grid
-    --print $ emptyCols grid
-    --putStrLn ""
-    let newGrid = expandGrid grid
-    --printGrid newGrid
-    let galaxies = findGalaxies newGrid
+    let erows = emptyRows grid
+    let ecols = emptyCols grid
+    let galaxies = findGalaxies grid
     --print galaxies
-    let combos = combinations galaxies
+    let expGalaxies = map (expandGalaxy ecols erows) galaxies
+    --print expGalaxies
+    let combos = combinations expGalaxies
     --print combos
     --print $ length combos
     print $ sum $ map (uncurry minSteps) combos
